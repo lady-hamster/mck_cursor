@@ -50,7 +50,10 @@ def complete(system: str, messages: list[dict], max_tokens: int) -> str:
         system=system,
         messages=messages,
     )
-    return response.content[0].text
+    for block in response.content:
+        if block.type == "text":
+            return block.text
+    raise ValueError("No text block found in response")
 
 
 def ask_interviewer() -> str:
