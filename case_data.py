@@ -1,5 +1,8 @@
 """Fixed case for the MVP. Swap this dict later without changing app.py."""
 
+import json
+import random
+
 CASE = {
     "title": "Declining Profitability — TechRetail Co.",
     "public_brief": (
@@ -37,3 +40,48 @@ CASE = {
         "by competitive pressure from online players."
     ),
 }
+
+INDUSTRIES = ["retail", "healthcare", "logistics", "fintech", "public sector", "hospitality"]
+CASE_TYPES = ["profitability", "market entry", "growth strategy"]
+
+def generate_case(client, model: str) -> dict:
+    industry = random.choice(INDUSTRIES)
+    case_type = random.choice(CASE_TYPES)
+
+    system_prompt = f"""You are generating a business case for a case-interview
+    training tool. Create a {case_type} case in the {industry} industry.
+
+    Respond with ONLY valid JSON, no markdown fences, no extra text, matching
+    exactly this structure:
+
+    {{
+      "title": "string",
+      "public_brief": "string, 2-3 sentences, what the candidate sees first",
+      "hidden_context": {{
+        "key_fact_1": "string",
+        "key_fact_2": "string",
+        "key_fact_3": "string",
+        "key_fact_4": "string"
+      }},
+      "case_type": "{case_type}",
+      "reference_hypothesis": "string, the model-answer hypothesis"
+    }}"""
+
+    response = client.messages.create(
+        model=model,
+        max_tokens=1000,
+        system=system_prompt,
+        messages=[{"role": "user", "content": "Generate the case now."}],
+    )
+
+    for block in response.content:
+        if block.type == "text":
+            return json.loads(block.text)
+    raise ValueError("No text block found in response")
+
+
+def get_case(client, model: str) -> dict:
+    try:
+        return generate_case(client, model)
+    except (json.JSONDecodeError, Exception):
+        return CASE  # fallback seguro si la generación falla

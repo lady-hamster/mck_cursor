@@ -6,7 +6,7 @@ import streamlit as st
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-from case_data import CASE
+from case_data import CASE, get_case
 from prompts import (
     evaluator_system_prompt,
     evaluator_user_message,
@@ -15,7 +15,7 @@ from prompts import (
 
 load_dotenv()
 
-MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 MAX_TOKENS_INTERVIEWER = 400
 MAX_TOKENS_EVALUATOR = 700
 
@@ -40,6 +40,8 @@ def init_session() -> None:
         st.session_state.messages = []
     if "evaluation" not in st.session_state:
         st.session_state.evaluation = ""
+    if "case" not in st.session_state:
+        st.session_state.case = CASE
 
 
 def complete(system: str, messages: list[dict], max_tokens: int) -> str:
@@ -58,7 +60,7 @@ def complete(system: str, messages: list[dict], max_tokens: int) -> str:
 
 def ask_interviewer() -> str:
     return complete(
-        interviewer_system_prompt(CASE),
+        interviewer_system_prompt(st.session_state.case),
         st.session_state.messages,
         MAX_TOKENS_INTERVIEWER,
     )
@@ -66,7 +68,7 @@ def ask_interviewer() -> str:
 
 def run_evaluation(writeup: str) -> str:
     return complete(
-        evaluator_system_prompt(CASE),
+        evaluator_system_prompt(st.session_state.case),
         [{"role": "user", "content": evaluator_user_message(writeup, st.session_state.messages)}],
         MAX_TOKENS_EVALUATOR,
     )
@@ -126,13 +128,22 @@ def render_writeup() -> None:
         render_evaluation(st.session_state.evaluation)
 
 
+def render_sidebar() -> None:
+    if st.sidebar.button("🔄 New case"):
+        with st.spinner("Generating a new case..."):
+            st.session_state.case = get_case(get_client(), MODEL)
+        st.session_state.messages = []
+        st.session_state.evaluation = ""
+        st.rerun()
+
 def main() -> None:
     st.set_page_config(page_title="Case Interview Coach", layout="centered")
     init_session()
+    render_sidebar()
 
     st.title("Case Interview Coach")
-    st.markdown(f"**{CASE['title']}**")
-    st.info(CASE["public_brief"])
+    st.markdown(f"**{st.session_state.case['title']}**")
+    st.info(st.session_state.case["public_brief"])
 
     render_chat()
     st.divider()
