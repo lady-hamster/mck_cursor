@@ -71,26 +71,34 @@ CASE = {
 }
 ```
 
-## Evaluation rubric
+## Evaluation rubric — Bain Method
 
-The evaluator reviews the user's text (case type + objectives + hypothesis)
-against these criteria, always in this order:
+The evaluator scores the candidate's clarifying questions and written framing
+(case type + objective + hypothesis) across three areas, following the Bain
+case interview evaluation method:
 
-1. **Case type** — did they correctly identify this as a profitability case
-   (not market entry, growth, etc.)?
-2. **Client objective** — did they distinguish between "what happened"
-   (diagnosis) and "what to do" (prescription)?
-3. **MECE structure** — does the hypothesis separate mutually exclusive causes
-   (revenue vs. costs) without overlap?
-4. **Hypothesis quality** — is it a specific, testable hypothesis, or a vague
-   one ("we need to improve efficiency")?
-5. **Key questions not asked** — the evaluator can flag 1-2 questions a strong
-   candidate would have asked that the user didn't.
+**1. Value Addition** (each scored 1-5, 5 = highest)
+- Structured problem-solving
+- Business judgment
+- Quant skills
+- Creativity
+- Drive to results (80/20 thinking)
+- Overall value addition score
 
-Feedback is returned in this format (instruct the model to respond this way):
+**2. Client/Team** (each scored 1-5)
+- Drive/achievement
+- Team skills
+- Communication
+- Professionalism
+- Leadership
+- Overall score
 
-```
-✅ / ⚠️ / ❌  [Criterion]: [brief comment, 1-2 lines]
+**3. Reality Check** (yes/no + one-line reason)
+- Airport Test: would you want this person on your team?
+- Would you give this person an offer?
+
+Output format: structured JSON (not free text), so the UI can render scores
+as metrics rather than parsing prose.
 ```
 
 ## Extension points (for the demo's "live options")

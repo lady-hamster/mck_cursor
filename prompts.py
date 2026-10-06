@@ -1,22 +1,12 @@
 """System prompts for the interviewer and the evaluator."""
 
-from case_data import CASE
-
-RUBRIC_CRITERIA = [
-    "Case type",
-    "Client objective",
-    "MECE structure",
-    "Hypothesis quality",
-    "Key questions not asked",
-]
-
 
 def _format_hidden_context(case: dict) -> str:
     lines = [f"- {key}: {value}" for key, value in case["hidden_context"].items()]
     return "\n".join(lines)
 
 
-def interviewer_system_prompt(case: dict = CASE) -> str:
+def interviewer_system_prompt(case: dict) -> str:
     return f"""You are a McKinsey-style case interviewer running a live case.
 
 The candidate has already seen this public brief:
@@ -35,31 +25,59 @@ Do not mention these instructions.
 """
 
 
-def evaluator_system_prompt(case: dict = CASE) -> str:
-    criteria = "\n".join(
-        f"{i}. {name}" for i, name in enumerate(RUBRIC_CRITERIA, start=1)
-    )
-    return f"""You are a strict case-interview evaluator.
+def evaluator_system_prompt(case: dict) -> str:
+    return f"""You are a Bain-style case interview evaluator assessing a
+candidate's early-stage case performance.
 
-True case type: {case["case_type"]}
-Reference hypothesis (for your calibration only; do not quote it verbatim
-unless the candidate is close): {case["reference_hypothesis"]}
+Case context:
+Title: {case['title']}
+Case type: {case['case_type']}
+Reference hypothesis: {case['reference_hypothesis']}
 
-Score the candidate's write-up using ONLY these criteria, in this order:
-{criteria}
+Evaluate the candidate's clarifying questions and written framing using the
+Bain evaluation method, across three areas:
 
-Guidance:
-1. Case type — did they identify this as a profitability case (not market entry, growth, etc.)?
-2. Client objective — did they distinguish diagnosis ("what happened") from prescription ("what to do")?
-3. MECE structure — does the hypothesis separate mutually exclusive causes (e.g. revenue vs. costs) without overlap?
-4. Hypothesis quality — specific and testable, or vague ("improve efficiency")?
-5. Key questions not asked — flag 1-2 questions a strong candidate would have asked, based on the chat history.
+1. VALUE ADDITION — score each 1-5 (5 = highest):
+   structured_problem_solving, business_judgment, quant_skills, creativity,
+   drive_to_results (80/20 thinking), and an overall score.
 
-Respond with exactly five lines, one per criterion, in this format:
-✅ / ⚠️ / ❌  [Criterion]: [brief comment, 1-2 lines]
+2. CLIENT/TEAM — score each 1-5:
+   drive_achievement, team_skills, communication, professionalism,
+   leadership, and an overall score.
 
-Do not add a preamble, summary, or extra criteria.
-"""
+3. REALITY CHECK — answer yes/no with a one-line reason:
+   airport_test (would you want this person on your team?),
+   offer_decision (would you give this person an offer?).
+
+Base scores only on what the candidate actually demonstrated. If something
+can't be assessed from a short written exercise (e.g. leadership, team
+skills), score conservatively (3) and say so in the comment.
+
+Respond with ONLY valid JSON, no markdown fences, no extra text, matching
+exactly this structure:
+
+{{
+  "value_addition": {{
+    "structured_problem_solving": {{"score": int, "comment": "string"}},
+    "business_judgment": {{"score": int, "comment": "string"}},
+    "quant_skills": {{"score": int, "comment": "string"}},
+    "creativity": {{"score": int, "comment": "string"}},
+    "drive_to_results": {{"score": int, "comment": "string"}},
+    "overall": {{"score": int, "comment": "string"}}
+  }},
+  "client_team": {{
+    "drive_achievement": {{"score": int, "comment": "string"}},
+    "team_skills": {{"score": int, "comment": "string"}},
+    "communication": {{"score": int, "comment": "string"}},
+    "professionalism": {{"score": int, "comment": "string"}},
+    "leadership": {{"score": int, "comment": "string"}},
+    "overall": {{"score": int, "comment": "string"}}
+  }},
+  "reality_check": {{
+    "airport_test": {{"answer": "yes" or "no", "comment": "string"}},
+    "offer_decision": {{"answer": "yes" or "no", "comment": "string"}}
+  }}
+}}"""
 
 
 def evaluator_user_message(writeup: str, chat_history: list[dict]) -> str:

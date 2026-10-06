@@ -1,12 +1,13 @@
 """Case Interview Coach — Streamlit MVP."""
 
+import json
 import os
 
 import streamlit as st
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-from case_data import CASE, get_case
+from case_data import CASE, get_case, _strip_markdown_fences
 from prompts import (
     evaluator_system_prompt,
     evaluator_user_message,
@@ -17,7 +18,7 @@ load_dotenv()
 
 MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 MAX_TOKENS_INTERVIEWER = 400
-MAX_TOKENS_EVALUATOR = 700
+MAX_TOKENS_EVALUATOR = 2000
 
 
 def get_client() -> Anthropic:
@@ -39,9 +40,11 @@ def init_session() -> None:
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "evaluation" not in st.session_state:
-        st.session_state.evaluation = ""
+        st.session_state.evaluation = None
     if "case" not in st.session_state:
         st.session_state.case = CASE
+    if "case_error" not in st.session_state:
+        st.session_state.case_error = None
 
 
 def complete(system: str, messages: list[dict], max_tokens: int) -> str:
@@ -66,22 +69,49 @@ def ask_interviewer() -> str:
     )
 
 
-def run_evaluation(writeup: str) -> str:
-    return complete(
+def run_evaluation(writeup: str) -> dict:
+    raw = complete(
         evaluator_system_prompt(st.session_state.case),
         [{"role": "user", "content": evaluator_user_message(writeup, st.session_state.messages)}],
         MAX_TOKENS_EVALUATOR,
     )
+    cleaned = _strip_markdown_fences(raw)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        return {"_raw_fallback": raw, "_error": str(e)}
 
 
-def render_evaluation(text: str) -> None:
-    st.subheader("Feedback")
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if not lines:
-        st.warning("No evaluation text returned.")
+def render_evaluation(data: dict) -> None:
+    if "_raw_fallback" in data:
+        st.warning(f"Could not parse structured feedback: {data.get('_error', 'unknown error')}")
+        st.markdown(data["_raw_fallback"])
         return
-    for line in lines:
-        st.markdown(line)
+
+    def render_area(title: str, area: dict) -> None:
+        st.markdown(f"#### {title}")
+        cols = st.columns(len(area))
+        for col, (key, val) in zip(cols, area.items()):
+            with col:
+                st.metric(key.replace("_", " ").title(), f"{val['score']}/5")
+        for key, val in area.items():
+            st.caption(f"**{key.replace('_', ' ').title()}:** {val['comment']}")
+
+    st.subheader("Well done! Here is your feedback")
+    render_area("1. Value Addition", data["value_addition"])
+    st.divider()
+    render_area("2. Client / Team", data["client_team"])
+    st.divider()
+
+    st.markdown("#### 3. Reality Check")
+    rc = data["reality_check"]
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Airport Test", rc["airport_test"]["answer"].upper())
+        st.caption(rc["airport_test"]["comment"])
+    with col2:
+        st.metric("Offer Decision", rc["offer_decision"]["answer"].upper())
+        st.caption(rc["offer_decision"]["comment"])
 
 
 def render_chat() -> None:
@@ -131,15 +161,21 @@ def render_writeup() -> None:
 def render_sidebar() -> None:
     if st.sidebar.button("🔄 New case"):
         with st.spinner("Generating a new case..."):
-            st.session_state.case = get_case(get_client(), MODEL)
+            new_case, error = get_case(get_client(), MODEL)
+        st.session_state.case = new_case
+        st.session_state.case_error = error
         st.session_state.messages = []
-        st.session_state.evaluation = ""
+        st.session_state.evaluation = None
         st.rerun()
+
 
 def main() -> None:
     st.set_page_config(page_title="Case Interview Coach", layout="centered")
     init_session()
     render_sidebar()
+
+    if st.session_state.case_error:
+        st.error(f"Dynamic case generation failed: {st.session_state.case_error}")
 
     st.title("Case Interview Coach")
     st.markdown(f"**{st.session_state.case['title']}**")
